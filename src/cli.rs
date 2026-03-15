@@ -124,7 +124,8 @@ pub enum CountMode {
     Both,
     /// Count only words.
     ///
-    /// Words are counted by splitting on whitespace.
+    /// Words are counted by grouping by whitespace for space-separated languages,
+    /// while treating each Chinese/Japanese character as a separate word.
     Words,
     /// Count only characters.
     ///

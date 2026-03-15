@@ -13,11 +13,10 @@ use typst::text::{OverlineElem, RawElem, StrikeElem, SubElem, SuperElem, Underli
 /// Result of counting words and characters in a document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Count {
-    /// Total number of words in the document.
-    ///
-    /// Words are counted by splitting on whitespace, which works well for
-    /// space-separated languages but may not be accurate for languages like
-    /// Chinese or Japanese where words are not separated by spaces.
+	/// Words are counted by grouping non-whitespace characters together for
+    /// space-separated languages (including Korean Hangul). For Chinese and
+    /// Japanese text, each CJK character, Kana, or full-width punctuation
+    /// is counted as an individual word.
     pub words: usize,
 
     /// Total number of characters in the document.
@@ -60,7 +59,7 @@ pub struct Count {
 ///
 /// # Counting Method
 ///
-/// - **Words**: Split by Unicode whitespace (equivalent to Rust's `split_whitespace()`)
+/// - **Words**: Splits English/Latin and Korean words by whitespace. Chinese and Japanese characters (CJK ideographs, Kana, etc.) are counted individually.
 /// - **Characters**: Total Unicode scalar values (equivalent to Rust's `chars().count()`)
 ///
 /// # Avoiding Double-Counting
@@ -99,7 +98,21 @@ pub fn count_document(
         let text = element.plain_text();
         if !text.is_empty() {
             characters += text.chars().count();
-            words += text.split_whitespace().count();
+
+            let mut in_word = false;
+            for c in text.chars() {
+                if is_cjk(c) {
+                    words += 1;
+                    in_word = false;
+                } else if c.is_whitespace() {
+                    in_word = false;
+                } else {
+                    if !in_word {
+                        words += 1;
+                        in_word = true;
+                    }
+                }
+            }
         }
     }
 
@@ -187,4 +200,17 @@ mod tests {
         assert_eq!(count1, count2);
         assert_ne!(count1, count3);
     }
+}
+
+/// Checks if a character is a CJK (Chinese, Japanese) character or full-width punctuation.
+/// This includes ideographs, syllabaries (Kana), and CJK punctuation, but excludes Korean Hangul
+/// which is typically separated by spaces and handled well by whitespace grouping.
+fn is_cjk(c: char) -> bool {
+    let u = c as u32;
+    (0x4E00..=0x9FFF).contains(&u) ||   // CJK Unified Ideographs
+    (0x3400..=0x4DBF).contains(&u) ||   // CJK Extension A
+    (0x20000..=0x323AF).contains(&u) || // CJK Extension B-H
+    (0x3000..=0x312F).contains(&u) ||   // CJK Symbols, Kana, Bopomofo
+    (0x3190..=0x31FF).contains(&u) ||   // Kanbun, Bopomofo Ext, Strokes, Kana Ext
+    (0xFF00..=0xFFEF).contains(&u)      // Halfwidth and Fullwidth Forms
 }
